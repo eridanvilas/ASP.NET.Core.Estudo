@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Text;
+using AutoMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using WebAPI.Domain.Model.Entities;
+using WebAPI.Identity.Mapper;
 using WebAPI.Repository.Repositories;
 
 namespace WebAPI.Identity
@@ -34,13 +36,12 @@ namespace WebAPI.Identity
 
 
             services.AddDbContext<ContextRepository>(
-            opt => opt.UseSqlServer(Configuration.GetConnectionString("connectionString"),
-            sql => sql.MigrationsAssembly(migrationAssembly))
-         );
-
+               opt => opt.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"), sql =>
+               sql.MigrationsAssembly(migrationAssembly))
+           );
             services.AddIdentity<User, Role>(options =>
             {
-                options.SignIn.RequireConfirmedEmail = true;
+
                 options.Password.RequireDigit = false;
                 options.Password.RequireNonAlphanumeric = false;
                 options.Password.RequireLowercase = false;
@@ -74,6 +75,13 @@ namespace WebAPI.Identity
                     .AddJsonOptions(opt => opt.SerializerSettings.ReferenceLoopHandling = 
                     Newtonsoft.Json.ReferenceLoopHandling.Ignore);
 
+            var mappingConfig = new MapperConfiguration(cfg =>
+            {
+                cfg.AddProfile(new MapperProfile());
+            });
+
+            IMapper mapper = mappingConfig.CreateMapper();
+            services.AddSingleton(mapper);
             services.AddCors();
         }
 

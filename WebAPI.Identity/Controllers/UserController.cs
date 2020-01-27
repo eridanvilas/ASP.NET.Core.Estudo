@@ -35,21 +35,45 @@ namespace WebAPI.Identity.Controllers
             _mapper = mapper;
         }
 
-        // GET: api/User
         [HttpGet]
-        public IEnumerable<string> Get()
+        public IActionResult Get()
         {
-            return new string[] { "value1", "value2" };
+            return Ok(new UserDTO());
         }
 
-        // GET: api/User/5
-        [HttpGet("{id}", Name = "Get")]
-        public string Get(int id)
+        [HttpPost("Login")]
+        public async Task<IActionResult> Login(UserLoginDTO userLogin)
         {
-            return "value";
+            try
+            {
+                var user = await _userManager.FindByNameAsync(userLogin.UserName);
+                if (user == null)
+                {
+                    return NotFound();
+                }
+                var result = await _signInManager.CheckPasswordSignInAsync(user, userLogin.Password, false);
+                if (result.Succeeded)
+                {
+                    var appUser = await _userManager.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == user.UserName.ToUpper());
+                    var userReturn = _mapper.Map<UserDTO>(appUser);
+
+                    return Ok(new
+                    {
+                        token = GenerateJWToken(appUser).Result,
+                        user = userReturn
+                    });
+
+                }
+
+                return Unauthorized();
+
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"Error {ex.Message}");
+            }
         }
 
-        // POST: api/User
         [HttpPost("Register")]
         public async Task<IActionResult> Register(UserDTO userDTO)
         {
@@ -62,7 +86,8 @@ namespace WebAPI.Identity.Controllers
                     user = new User
                     {
                         UserName = userDTO.UserName,
-                        Email = userDTO.UserName
+                        Email = userDTO.UserName,
+                        FullName = userDTO.FullName
                     };
 
                     var result = await _userManager.CreateAsync(user, userDTO.Password);
@@ -73,16 +98,17 @@ namespace WebAPI.Identity.Controllers
                             .FirstOrDefaultAsync(u => u.NormalizedUserName == user.UserName.ToUpper());
 
                         var token = GenerateJWToken(appUser).Result;
-                        var confirmationEmail = Url.Action("ConfirmEmail", "Home", new { token = token, email = user.Email }, Request.Scheme);
-                        System.IO.File.WriteAllText("confirmationEmailLink.txt", confirmationEmail);
+                        //var confirmationEmail = Url.Action("ConfirmEmail", "Home", new { token = token, email = user.Email }, Request.Scheme);
+                        //System.IO.File.WriteAllText("confirmationEmailLink.txt", confirmationEmail);
 
-                        return RedirectToAction("Success");
+                        //return RedirectToAction("Success");
+                        return Ok(token);
                     }
                 }
-
                 return Unauthorized();
+
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, $"Error {ex.Message}");
             }
@@ -98,7 +124,7 @@ namespace WebAPI.Identity.Controllers
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            foreach(var role in roles)
+            foreach (var role in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
@@ -115,23 +141,11 @@ namespace WebAPI.Identity.Controllers
                 SigningCredentials = creds
             };
 
-            var tokenHendler = new JwtSecurityTokenHandler();
+            var tokenHandler = new JwtSecurityTokenHandler();
 
-            var token = tokenHendler.CreateToken(tokenDescription);
+            var token = tokenHandler.CreateToken(tokenDescription);
 
-            return tokenHendler.WriteToken(token);
-        }
-
-        // PUT: api/User/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
-        {
-        }
-
-        // DELETE: api/ApiWithActions/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
-        {
+            return tokenHandler.WriteToken(token);
         }
     }
 }
