@@ -2,10 +2,12 @@
 using System.Text;
 using AutoMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +41,7 @@ namespace WebAPI.Identity
                opt => opt.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"), sql =>
                sql.MigrationsAssembly(migrationAssembly))
            );
-            services.AddIdentity<User, Role>(options =>
+            services.AddIdentityCore<User>(options =>
             {
 
                 options.Password.RequireDigit = false;
@@ -51,6 +53,7 @@ namespace WebAPI.Identity
                 options.Lockout.MaxFailedAccessAttempts = 3;
                 options.Lockout.AllowedForNewUsers = true;
             })
+              .AddRoles<Role>()
               .AddEntityFrameworkStores<ContextRepository>()
               .AddRoleValidator<RoleValidator<Role>>()
               .AddRoleManager<RoleManager<Role>>()
@@ -70,7 +73,14 @@ namespace WebAPI.Identity
                         };
                     });
 
-            services.AddMvc()
+            services.AddMvc(options => 
+                    {
+                        var policy = new AuthorizationPolicyBuilder()
+                        .RequireAuthenticatedUser()
+                        .Build();
+
+                        options.Filters.Add(new AuthorizeFilter(policy));
+                    })
                     .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
                     .AddJsonOptions(opt => opt.SerializerSettings.ReferenceLoopHandling = 
                     Newtonsoft.Json.ReferenceLoopHandling.Ignore);
@@ -92,6 +102,8 @@ namespace WebAPI.Identity
             {
                 app.UseDeveloperExceptionPage();
             }
+
+            app.UseAuthentication();
 
             app.UseCors(x => x.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
             app.UseMvc();
